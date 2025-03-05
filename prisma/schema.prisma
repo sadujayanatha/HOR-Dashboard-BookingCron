@@ -1,0 +1,573 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Account {
+  id                String  @id
+  userId            Int
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  users             users   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model GuestProfile {
+  id         Int        @id @default(autoincrement())
+  userId     Int?       @unique
+  first_name String?
+  last_name  String?
+  email      String     @unique
+  country    String?
+  phone      String?
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @default(now())
+  users      users?     @relation(fields: [userId], references: [id])
+  bookings   bookings[]
+}
+
+model Session {
+  id           String   @id
+  sessionToken String   @unique
+  userId       Int
+  expires      DateTime
+  users        users    @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Token {
+  id          String   @id
+  value       String
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime
+  description String?
+  isRevoked   Boolean  @default(false)
+
+  @@index([expiresAt])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model accounts_transaction {
+  id         Int        @id @default(autoincrement())
+  name       String
+  propertyId String
+  updatedAt  DateTime   @default(now()) @db.Timestamp(6)
+  createdAt  DateTime   @default(now())
+  properties properties @relation(fields: [propertyId], references: [beds24_id], onDelete: Cascade)
+  expenses   expenses[]
+  incomes    incomes[]
+
+  @@index([propertyId])
+}
+
+model amenities {
+  id             Int              @id @default(autoincrement())
+  code           String
+  name           String
+  room_amenities room_amenities[]
+}
+
+model booking_days {
+  id         Int      @id @default(autoincrement())
+  bookingId  Int
+  propertyId String
+  date       DateTime
+  revenue    Float
+  bookings   bookings @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([date])
+  @@index([propertyId])
+}
+
+model bookings {
+  id                Int            @id @default(autoincrement())
+  propertyId        String
+  booking_id        String         @unique
+  guest_name        String
+  arrival           DateTime
+  departure         DateTime
+  total_revenue     Float
+  commission        Float?
+  status            String
+  channel           String?        @db.VarChar(255)
+  roomId            String?
+  updatedAt         DateTime       @default(now()) @db.Timestamp(6)
+  createdAt         DateTime       @default(now())
+  adr               Float?
+  country           String?
+  hor_payout        Float?
+  owner_payout      Float?
+  guest_email       String?
+  guest_phone       String?
+  note              String?
+  num_adult         Int            @default(1)
+  num_children      Int            @default(0)
+  guestId           Int?
+  channel_reference String?        @unique
+  booking_days      booking_days[]
+  GuestProfile      GuestProfile?  @relation(fields: [guestId], references: [id])
+  properties        properties     @relation(fields: [propertyId], references: [beds24_id], onDelete: Cascade)
+  rooms             rooms?         @relation(fields: [roomId], references: [room_id])
+
+  @@index([arrival])
+  @@index([departure])
+  @@index([propertyId])
+  @@index([roomId])
+}
+
+model cancellation_policy {
+  id         Int          @id @default(autoincrement())
+  name       String?
+  detail     String?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @default(now()) @db.Timestamp(6)
+  properties properties[]
+}
+
+model contact_requests {
+  id        String   @id
+  name      String
+  email     String
+  message   String
+  createdAt DateTime @default(now())
+  read      Boolean  @default(false)
+  archived  Boolean  @default(false)
+}
+
+model contacts {
+  id          Int          @id @default(autoincrement())
+  name        String
+  phoneNumber String
+  email       String?
+  countryId   Int
+  roleId      Int?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime
+  propertyIds String[]
+  countries   countries    @relation(fields: [countryId], references: [id])
+  roles       roles?       @relation(fields: [roleId], references: [id])
+  properties  properties[] @relation("ContactToProperty")
+}
+
+model countries {
+  id        Int        @id @default(autoincrement())
+  name      String
+  code      String
+  createdAt DateTime   @default(now())
+  updatedAt DateTime
+  contacts  contacts[]
+}
+
+model cron_entry {
+  id          Int      @id @default(autoincrement())
+  name        String
+  started_at  DateTime
+  finished_at DateTime
+}
+
+model daily_worker_expense_details {
+  id        Int      @id @default(autoincrement())
+  expenseId Int      @unique
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+  expenses  expenses @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+
+  @@index([expenseId])
+}
+
+model electricity_expense_details {
+  id             Int      @id @default(autoincrement())
+  expenseId      Int      @unique
+  beforeRecharge Float
+  afterRecharge  Float
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @default(now())
+  expenses       expenses @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+
+  @@index([expenseId])
+}
+
+model expense_categories {
+  id        Int                 @id @default(autoincrement())
+  name      String
+  updatedAt DateTime            @default(now()) @db.Timestamp(6)
+  createdAt DateTime            @default(now())
+  type      ExpenseCategoryType @default(COMMON)
+  expenses  expenses[]
+}
+
+model expenses {
+  id                           Int                           @id @default(autoincrement())
+  propertyId                   String
+  created_at                   DateTime                      @default(now())
+  description                  String
+  category_id                  Int
+  reference                    String?
+  value                        Float
+  file_id                      String?
+  file_name                    String?
+  account_transaction          Int
+  updatedAt                    DateTime                      @default(now()) @db.Timestamp(6)
+  roomId                       String?
+  daily_worker_expense_details daily_worker_expense_details?
+  electricity_expense_details  electricity_expense_details?
+  accounts_transaction         accounts_transaction          @relation(fields: [account_transaction], references: [id])
+  expense_categories           expense_categories            @relation(fields: [category_id], references: [id])
+  properties                   properties                    @relation(fields: [propertyId], references: [beds24_id], onDelete: Cascade)
+  rooms                        rooms?                        @relation(fields: [roomId], references: [room_id])
+
+  @@index([category_id])
+  @@index([propertyId])
+}
+
+model icals {
+  id          Int      @id @default(autoincrement())
+  uid         String   @unique
+  property_id String
+  room_id     String
+  arrival     DateTime
+  departure   DateTime
+  rooms       rooms    @relation(fields: [room_id], references: [room_id], onDelete: Cascade)
+}
+
+model images {
+  id     Int     @id @default(autoincrement())
+  roomId Int
+  url    String?
+  order  Int?
+  rooms  rooms   @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@index([roomId])
+}
+
+model incomes {
+  id                   Int                  @id @default(autoincrement())
+  propertyId           String
+  date                 DateTime
+  description          String
+  category             String
+  reference            String?
+  value                Float
+  booking_id           String
+  account_transaction  Int
+  file_id              String?
+  file_name            String?
+  updatedAt            DateTime             @default(now()) @db.Timestamp(6)
+  createdAt            DateTime             @default(now())
+  manual_input         Boolean              @default(false)
+  accounts_transaction accounts_transaction @relation(fields: [account_transaction], references: [id])
+  properties           properties           @relation(fields: [propertyId], references: [beds24_id], onDelete: Cascade)
+
+  @@unique([booking_id, date])
+  @@index([date])
+  @@index([propertyId])
+}
+
+model news {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String
+  status      Boolean
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime
+}
+
+model page {
+  id              Int      @id @default(autoincrement())
+  title           String
+  slug            String   @unique
+  metaTitle       String
+  metaDescription String
+  keywords        String?
+  content         String
+  status          Boolean  @default(true)
+  createAt        DateTime @default(now())
+  updatedAt       DateTime
+  byUser          Int
+}
+
+model payment {
+  id                   Int      @id @default(autoincrement())
+  id_booking           String
+  arrival              DateTime
+  departure            DateTime
+  status               String
+  payment_method       String
+  url                  String
+  id_transaction       String
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @default(now()) @db.Timestamp(6)
+  baseRate             Float    @default(0)
+  serviceFee           Float    @default(0)
+  serviceFeePercentage Float    @default(0)
+  total                Float    @default(0)
+}
+
+model promo_codes {
+  id                Int                   @id @default(autoincrement())
+  name              String                @unique
+  code              String?               @unique
+  discountType      DiscountType
+  discountValue     Float
+  minLengthOfStay   Int?
+  purchaseStartDate DateTime?
+  purchaseEndDate   DateTime?
+  stayStartDate     DateTime?
+  stayEndDate       DateTime?
+  mustBeBookedType  BookingConditionType?
+  mustBeBookedDays  Int?
+  active            Boolean               @default(true)
+  overlapping       Boolean               @default(false)
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime
+  property_promos   property_promos[]
+}
+
+model properties {
+  name                 String
+  beds24_id            String                 @id @unique
+  number_of_units      Int?                   @default(1)
+  hor_commission       Int?                   @default(0)
+  address              String?
+  city                 String?
+  country              String?
+  accountingNumber     String?
+  airbnb               String?
+  bookingcom           String?
+  contractType         String?
+  createdAt            DateTime               @default(now())
+  dateListed           DateTime?
+  expedia              String?
+  googleMaps           String?
+  hostNumber           String?
+  listingsNumber       String?
+  phoneNumber          String?
+  reservationNumber    String?
+  tiket                String?
+  traveloka            String?
+  updatedAt            DateTime               @default(now())
+  youtube              String?
+  coverImage           String?
+  cancellation_id      Int?
+  checkinEnd           String?
+  checkinStart         String?
+  checkoutStart        String?
+  map_lat              String?
+  map_long             String?
+  published            Boolean                @default(true)
+  specialNote          String?
+  accountingContactId  Int?
+  hostContactId        Int?
+  listingsContactId    Int?
+  reservationContactId Int?
+  accounts_transaction accounts_transaction[]
+  bookings             bookings[]
+  expenses             expenses[]
+  incomes              incomes[]
+  cancellation_policy  cancellation_policy?   @relation(fields: [cancellation_id], references: [id])
+  property_promos      property_promos[]
+  reviews              reviews[]
+  rooms                rooms[]
+  user_properties      user_properties[]
+  villa_photoshoot     villa_photoshoot[]
+  contacts             contacts[]             @relation("ContactToProperty")
+
+  @@index([city])
+  @@index([country])
+}
+
+model property_promos {
+  id          Int         @id @default(autoincrement())
+  promoId     Int
+  propertyId  String
+  promo_codes promo_codes @relation(fields: [promoId], references: [id], onDelete: Cascade)
+  properties  properties  @relation(fields: [propertyId], references: [beds24_id], onDelete: Cascade)
+}
+
+model reset_password_tokens {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  token     String
+  expiry    DateTime @default(now())
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+  users     users    @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model reviews {
+  id                   String     @id
+  channel_reference    String?    @unique
+  propertyId           String
+  roomId               String?
+  guest_name           String?
+  reviewer_id          String?
+  overall_rating       Int?
+  listing_id           String?
+  public_review        String?
+  category_ratings     Json?
+  review_category_tags Json?
+  submitted_at         DateTime?
+  createdAt            DateTime   @default(now())
+  properties           properties @relation(fields: [propertyId], references: [beds24_id], onDelete: Cascade)
+  rooms                rooms?     @relation(fields: [roomId], references: [room_id], onDelete: Cascade)
+}
+
+model roles {
+  id          Int        @id @default(autoincrement())
+  name        String
+  description String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime
+  contacts    contacts[]
+  users       users[]
+}
+
+model room_amenities {
+  id                Int       @id @default(autoincrement())
+  roomId            Int
+  amenitiesId       Int
+  parentAmenitiesId Int?
+  amenities         amenities @relation(fields: [amenitiesId], references: [id], onDelete: Cascade)
+  rooms             rooms     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+}
+
+model rooms {
+  id               Int                @id @default(autoincrement())
+  room_id          String             @unique
+  room_name        String
+  qty              Int
+  propertyId       String
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime
+  descriptions     String?
+  featured         Boolean            @default(false)
+  guest_access     String?
+  num_baths        Int                @default(1)
+  num_bedrooms     Int                @default(1)
+  num_beds         Int                @default(1)
+  num_guests       Int                @default(2)
+  rates            Int                @default(1)
+  type             Int                @default(1)
+  status           Boolean            @default(true)
+  urlslug          String             @default("-")
+  keyword          String?
+  meta_description String?
+  meta_title       String?
+  bookings         bookings[]
+  expenses         expenses[]
+  icals            icals[]
+  images           images[]
+  reviews          reviews[]
+  room_amenities   room_amenities[]
+  properties       properties         @relation(fields: [propertyId], references: [beds24_id], onDelete: Cascade)
+  villa_photoshoot villa_photoshoot[]
+
+  @@index([propertyId])
+}
+
+model service_fees {
+  id         Int      @id @default(autoincrement())
+  fee        Decimal
+  created_at DateTime @default(now())
+  updated_at DateTime
+}
+
+model user_properties {
+  id         Int        @id @default(autoincrement())
+  userId     Int
+  propertyId String
+  properties properties @relation(fields: [propertyId], references: [beds24_id], onDelete: Cascade)
+  users      users      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+  @@index([userId])
+}
+
+model users {
+  id                    Int                     @id @default(autoincrement())
+  username              String                  @unique
+  password              String
+  role                  String                  @default("owner")
+  fullname              String                  @default("Someone")
+  email                 String?                 @unique
+  resetToken            String?
+  resetTokenExpiry      DateTime?
+  updatedAt             DateTime                @default(now()) @db.Timestamp(6)
+  createdAt             DateTime                @default(now())
+  lastLogin             DateTime?
+  roleId                Int?
+  Account               Account[]
+  GuestProfile          GuestProfile?
+  Session               Session[]
+  reset_password_tokens reset_password_tokens[]
+  user_properties       user_properties[]
+  roles                 roles?                  @relation(fields: [roleId], references: [id])
+}
+
+model villa_photoshoot {
+  id             Int        @id @default(autoincrement())
+  propertyId     String
+  roomId         String
+  rates          String
+  additionalInfo String?
+  policies       String?
+  createAt       DateTime   @default(now())
+  updatedAt      DateTime
+  startrates     String?
+  status         Boolean    @default(true)
+  properties     properties @relation(fields: [propertyId], references: [beds24_id], onDelete: Cascade)
+  rooms          rooms      @relation(fields: [roomId], references: [room_id])
+}
+
+enum BookingConditionType {
+  LAST_MINUTE_BOOKING
+  EARLY_BOOKING
+}
+
+enum DiscountType {
+  PERCENTAGE_VALUE
+  FIXED_VALUE
+}
+
+enum ExpenseCategoryType {
+  COMMON
+  ELECTRICITY
+  DAILY_WORKER
+}
+
+// For tracking sync operations
+model SyncLog {
+  id               Int       @id @default(autoincrement())
+  operationType    String // "initial" or "incremental"
+  startTimestamp   DateTime  @default(now())
+  endTimestamp     DateTime?
+  status           String // "success", "error", "in_progress"
+  recordsProcessed Int?
+  errorMessage     String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@map("sync_logs")
+}

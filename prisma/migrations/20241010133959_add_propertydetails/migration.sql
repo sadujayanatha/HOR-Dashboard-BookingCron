@@ -1,0 +1,17 @@
+-- AlterTable
+ALTER TABLE "properties" ADD COLUMN     "accountingNumber" TEXT,
+ADD COLUMN     "airbnb" TEXT,
+ADD COLUMN     "bookingcom" TEXT,
+ADD COLUMN     "contractType" TEXT,
+ADD COLUMN     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "dateListed" TIMESTAMP(3),
+ADD COLUMN     "expedia" TEXT,
+ADD COLUMN     "googleMaps" TEXT,
+ADD COLUMN     "hostNumber" TEXT,
+ADD COLUMN     "listingsNumber" TEXT,
+ADD COLUMN     "phoneNumber" TEXT,
+ADD COLUMN     "reservationNumber" TEXT,
+ADD COLUMN     "tiket" TEXT,
+ADD COLUMN     "traveloka" TEXT,
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "youtube" TEXT;
