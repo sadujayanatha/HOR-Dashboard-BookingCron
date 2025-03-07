@@ -4,14 +4,12 @@ import { Queue } from 'bull';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { Beds24ApiService } from './beds24-api.service';
 import { format, subDays, addDays } from 'date-fns';
-import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { Beds24Property, Beds24Room } from './interfaces/beds24-api.interface';
 import { PropertyModel, RoomModel } from './interfaces/db.interface';
 import {
   FullSyncJobData,
   IncrementalSyncJobData,
-  SyncLogEntry,
   SyncOperationType,
   SyncStatus,
 } from './interfaces/sync.interface';
@@ -27,13 +25,12 @@ export class Beds24SyncService implements OnModuleInit {
     private beds24ApiService: Beds24ApiService,
     @InjectQueue('bookings-sync') private bookingsQueue: Queue,
     private prismaService: PrismaService,
-    private configService: ConfigService,
   ) {}
 
   async onModuleInit() {
     // Check if we need to perform initial sync by looking for properties and bookings
-    const propertiesCount = await this.prismaService.property.count();
-    const bookingCount = await this.prismaService.booking.count();
+    const propertiesCount = await this.prismaService.properties.count();
+    const bookingCount = await this.prismaService.bookings.count();
 
     const needsInitialSync = propertiesCount === 0 || bookingCount === 0;
 
@@ -107,7 +104,7 @@ export class Beds24SyncService implements OnModuleInit {
       // Queue full sync jobs for each property
       for (const property of properties) {
         await this.scheduleFullPropertySync(
-          property.id,
+          property.beds24_id ?? '',
           fromDate,
           toDate,
           syncLog.id,
@@ -149,7 +146,7 @@ export class Beds24SyncService implements OnModuleInit {
 
   // Schedule a full sync for a single property with pagination
   async scheduleFullPropertySync(
-    propertyId: number | string,
+    propertyId: string,
     fromDate: string,
     toDate: string,
     syncLogId: number,
@@ -232,7 +229,7 @@ export class Beds24SyncService implements OnModuleInit {
       // Queue a job for each property
       for (const property of properties) {
         await this.syncRecentPropertyChanges(
-          property.id,
+          property.beds24_id ?? '',
           modifiedFrom,
           syncLog.id,
         );
@@ -275,7 +272,7 @@ export class Beds24SyncService implements OnModuleInit {
   }
 
   async syncRecentPropertyChanges(
-    propertyId: number | string,
+    propertyId: string,
     modifiedFrom: string,
     syncLogId: number,
   ) {
@@ -314,7 +311,7 @@ export class Beds24SyncService implements OnModuleInit {
 
   private async upsertProperty(propertyData: Beds24Property): Promise<void> {
     try {
-      const propertyId = propertyData.id?.toString();
+      const propertyId = propertyData.beds24_id;
       if (!propertyId) {
         this.logger.warn('Skipping property without ID');
         return;
@@ -335,7 +332,7 @@ export class Beds24SyncService implements OnModuleInit {
       };
 
       // Upsert property
-      await this.prismaService.property.upsert({
+      await this.prismaService.properties.upsert({
         where: { beds24_id: propertyId },
         update: propertyModel,
         create: propertyModel,
@@ -381,10 +378,10 @@ export class Beds24SyncService implements OnModuleInit {
       };
 
       // Upsert room
-      await this.prismaService.room.upsert({
+      await this.prismaService.rooms.upsert({
         where: { room_id: roomId },
         update: roomModel,
-        create: roomModel,
+        create: { ...roomModel, createdAt: new Date(), updatedAt: new Date() },
       });
     } catch (error) {
       this.logger.error(

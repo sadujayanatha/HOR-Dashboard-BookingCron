@@ -173,12 +173,50 @@ export class BookingsProcessor {
 
     try {
       // Check if booking exists
-      const existingBooking = await this.prismaService.booking.findUnique({
+      const existingBooking = await this.prismaService.bookings.findUnique({
         where: { booking_id: bookingId },
       });
 
       // Get room ID if it exists
-      const roomId = bookingData.roomId?.toString();
+      // let roomId: any = bookingData.roomId?.toString();
+
+      // // If roomId is provided, verify it exists in the database
+      // if (roomId) {
+      //   const roomExists = await this.prismaService.rooms.findUnique({
+      //     where: { id: parseInt(roomId, 10) },
+      //   });
+
+      //   if (!roomExists) {
+      //     this.logger.warn(
+      //       `Room with ID ${roomId} not found in database. Setting roomId to null for booking ${bookingId}`,
+      //     );
+      //     roomId = null; // Set to null if not found
+      //   }
+      // }
+
+      // // Handle channel_reference - check if it's a unique value when it exists
+      // let channelReference = bookingData.channel;
+
+      // // If a channel_reference is provided, check if it's already used by another booking
+      // if (channelReference) {
+      //   // Check if this reference exists on another booking (not this one)
+      //   const existingWithReference =
+      //     await this.prismaService.bookings.findFirst({
+      //       where: {
+      //         channel_reference: channelReference,
+      //         booking_id: { not: bookingId }, // Exclude current booking
+      //       },
+      //     });
+
+      //   if (existingWithReference) {
+      //     this.logger.warn(
+      //       `channel_reference '${channelReference}' already exists in another booking. ` +
+      //         `Making it unique by appending booking ID for booking ${bookingId}`,
+      //     );
+      //     // Make it unique by appending booking ID
+      //     channelReference = `${channelReference}_${bookingId}`;
+      //   }
+      // }
 
       // Format property ID as string
       const propId = propertyId.toString();
@@ -187,12 +225,16 @@ export class BookingsProcessor {
       const bookingModel: BookingModel = {
         propertyId: propId,
         booking_id: bookingId,
+        guestId:
+          bookingData?.guests && bookingData?.guests[0]?.id
+            ? bookingData.guests[0].id
+            : null,
         guest_name:
           [bookingData.firstName, bookingData.lastName]
             .filter(Boolean)
             .join(' ') || 'Unknown Guest',
-        guest_email: bookingData.email,
-        guest_phone: bookingData.phone || bookingData.mobile,
+        guest_email: bookingData?.guests ? bookingData.guests[0].email : null,
+        guest_phone: bookingData?.guests ? bookingData.guests[0].phone : null,
         note: bookingData.notes || bookingData.comments || bookingData.message,
         num_adult: bookingData.numAdult || 1,
         num_children: bookingData.numChild || 0,
@@ -207,27 +249,29 @@ export class BookingsProcessor {
           : 0,
         adr: this.calculateADR(bookingData),
         status: bookingData.status || 'unknown',
-        channel: bookingData.channel || bookingData.apiSource,
-        channel_reference: bookingData.reference || bookingData.apiReference,
-        roomId: roomId,
+        channel: bookingData.apiSource,
+        channel_reference: bookingData.channel || bookingData.apiSource,
+        roomId: bookingData?.roomId
+          ? bookingData.roomId.toString()
+          : 'Unknown Room ID',
       };
 
       // Start a transaction
       await this.prismaService.$transaction(async (tx) => {
         if (existingBooking) {
           // Update existing booking
-          await tx.booking.update({
+          await tx.bookings.update({
             where: { id: existingBooking.id },
             data: bookingModel,
           });
 
           // Delete existing booking days for this booking
-          await tx.bookingDay.deleteMany({
+          await tx.booking_days.deleteMany({
             where: { bookingId: existingBooking.id },
           });
         } else {
           // Create new booking
-          await tx.booking.create({
+          await tx.bookings.create({
             data: bookingModel,
           });
         }
@@ -238,7 +282,7 @@ export class BookingsProcessor {
           bookingModel.departure &&
           bookingModel.total_revenue
         ) {
-          const booking = await tx.booking.findUnique({
+          const booking = await tx.bookings.findUnique({
             where: { booking_id: bookingId },
           });
 
@@ -272,7 +316,7 @@ export class BookingsProcessor {
             }
 
             // Insert booking days
-            await tx.bookingDay.createMany({
+            await tx.booking_days.createMany({
               data: bookingDaysData,
             });
           }

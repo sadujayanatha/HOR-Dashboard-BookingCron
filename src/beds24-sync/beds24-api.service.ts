@@ -1,7 +1,7 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
-import { format } from 'date-fns';
 import {
   Beds24ApiResponse,
   Beds24Booking,
@@ -10,45 +10,115 @@ import {
   Beds24Property,
 } from './interfaces/beds24-api.interface';
 import { PropertyBookingsOptions } from './interfaces/sync.interface';
+import { PrismaService } from 'src/prisma/prisma.service';
 
 @Injectable()
 export class Beds24ApiService {
   private readonly logger = new Logger(Beds24ApiService.name);
-  private readonly apiKey: string;
+  private readonly apiToken: string;
   private readonly apiUrl: string;
+  private readonly organization?: string;
 
-  constructor(private configService: ConfigService) {
-    this.apiKey = this.configService.get<string>('BEDS24_API_KEY');
+  constructor(
+    private configService: ConfigService,
+    private prismaService: PrismaService,
+  ) {
+    this.apiToken = this.configService.get<string>('BEDS24_API_KEY', '');
     this.apiUrl = this.configService.get<string>(
       'BEDS24_API_URL',
       'https://api.beds24.com/v2',
     );
+    this.organization = this.configService.get<string>(
+      'BEDS24_ORGANIZATION',
+      '',
+    );
+
+    if (!this.apiToken) {
+      this.logger.warn(
+        'BEDS24_API_TOKEN is not set. API calls will likely fail.',
+      );
+    }
   }
 
   /**
-   * Get all properties from Beds24
+   * Get HTTP headers for Beds24 API requests
+   */
+  private getHeaders() {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      token: this.apiToken,
+    };
+
+    // Add organization header if provided
+    if (this.organization) {
+      headers['organisation'] = this.organization;
+    }
+
+    return headers;
+  }
+
+  /**
+   * Get all properties from the local database
    */
   async getProperties(): Promise<Beds24Property[]> {
     try {
-      const response = await axios.post<Beds24ApiResponse<Beds24Property>>(
-        `${this.apiUrl}/properties`,
-        {
-          authentication: {
-            apiKey: this.apiKey,
-          },
+      // Retrieve properties from the database
+      const properties = await this.prismaService.properties.findMany({
+        include: {
+          rooms: true, // Include rooms related to each property
         },
-      );
+      });
 
-      if (!response.data || !response.data.success) {
-        this.logger.warn(
-          'API call to get properties failed or returned unsuccessful response',
-        );
+      if (!properties || properties.length === 0) {
+        this.logger.warn('No properties found in the database');
         return [];
       }
 
-      return response.data.data || [];
+      // Transform database properties to Beds24Property format
+      const transformedProperties: Beds24Property[] = [];
+
+      for (const property of properties) {
+        // Try to parse the beds24_id as an integer, fallback to 0 if it fails
+        const propertyId = property.beds24_id || '';
+
+        // Create a property object that matches the Beds24Property interface
+        const beds24Property: Beds24Property = {
+          beds24_id: propertyId,
+          name: property.name,
+          address: property.address || undefined,
+          city: property.city || undefined,
+          country: property.country || undefined,
+          checkinTimeFrom: property.checkinStart || undefined,
+          checkinTimeTo: property.checkinEnd || undefined,
+          checkoutTime: property.checkoutStart || undefined,
+          specialInstructions: property.specialNote || undefined,
+          status: property.published ? 'active' : 'inactive',
+        };
+
+        // Add rooms if they exist
+        if (property.rooms && property.rooms.length > 0) {
+          beds24Property.rooms = property.rooms.map((room) => ({
+            id: parseInt(room.room_id) || 0,
+            name: room.room_name,
+            quantity: room.qty,
+            type: room.type,
+            maxGuests: room.num_guests,
+            beds: room.num_beds,
+            bedrooms: room.num_bedrooms,
+            bathrooms: room.num_baths,
+            featured: room.featured,
+            status: room.status,
+          }));
+        }
+
+        transformedProperties.push(beds24Property);
+      }
+
+      return transformedProperties;
     } catch (error) {
-      this.logger.error(`Failed to fetch properties: ${error.message}`);
+      this.logger.error(
+        `Failed to fetch properties from database: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -60,69 +130,12 @@ export class Beds24ApiService {
     params: Beds24BookingsQueryParams,
   ): Promise<Beds24BookingsResult> {
     try {
-      const requestParams: any = {
-        authentication: {
-          apiKey: this.apiKey,
-        },
-      };
+      // Remove authentication from parameters since we're using headers
+      const { ...requestParams } = params;
 
-      // Add query parameters if provided
-      if (params.propertyId && params.propertyId.length > 0) {
-        requestParams.propertyId = params.propertyId;
-      }
-
-      if (params.roomId && params.roomId.length > 0) {
-        requestParams.roomId = params.roomId;
-      }
-
-      if (params.arrivalFrom) {
-        requestParams.arrivalFrom = params.arrivalFrom;
-      }
-
-      if (params.arrivalTo) {
-        requestParams.arrivalTo = params.arrivalTo;
-      }
-
-      if (params.departureFrom) {
-        requestParams.departureFrom = params.departureFrom;
-      }
-
-      if (params.departureTo) {
-        requestParams.departureTo = params.departureTo;
-      }
-
-      if (params.modifiedFrom) {
-        requestParams.modifiedFrom = params.modifiedFrom;
-      }
-
-      if (params.modifiedTo) {
-        requestParams.modifiedTo = params.modifiedTo;
-      }
-
-      if (params.filter) {
-        requestParams.filter = params.filter;
-      }
-
-      if (params.channel) {
-        requestParams.channel = params.channel;
-      }
-
-      if (params.status) {
-        requestParams.status = params.status;
-      }
-
-      // Pagination parameters
-      if (params.page) {
-        requestParams.page = params.page;
-      }
-
-      if (params.pageSize) {
-        requestParams.pageSize = params.pageSize;
-      }
-
-      const response = await axios.post<Beds24ApiResponse<Beds24Booking>>(
+      const response = await axios.get<Beds24ApiResponse<Beds24Booking>>(
         `${this.apiUrl}/bookings`,
-        requestParams,
+        { params: { ...requestParams }, headers: this.getHeaders() },
       );
 
       if (!response.data || !response.data.success) {
@@ -141,7 +154,7 @@ export class Beds24ApiService {
         nextPageLink,
         totalCount: response.data.count,
       };
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error(`Failed to fetch bookings: ${error.message}`);
       throw error;
     }
@@ -188,15 +201,13 @@ export class Beds24ApiService {
    * Get next page of bookings using next page information
    */
   async getNextPageBookings(
-    nextPageLink: string,
+    strNextPageLink: string,
   ): Promise<Beds24BookingsResult> {
     try {
       const response = await axios.get<Beds24ApiResponse<Beds24Booking>>(
-        nextPageLink,
+        strNextPageLink,
         {
-          headers: {
-            Authorization: `Bearer ${this.apiKey}`,
-          },
+          headers: this.getHeaders(),
         },
       );
 

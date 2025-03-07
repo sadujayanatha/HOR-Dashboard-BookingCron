@@ -14,16 +14,17 @@ export interface Beds24ApiResponse<T> {
 }
 
 export interface Beds24Property {
-  id: number;
+  beds24_id?: string;
+  propertyId?: string;
   name: string;
-  address?: string;
-  city?: string;
-  country?: string;
-  checkinTimeFrom?: string;
-  checkinTimeTo?: string;
-  checkoutTime?: string;
-  specialInstructions?: string;
-  status?: string;
+  address?: string | null;
+  city?: string | null;
+  country?: string | null;
+  checkinTimeFrom?: string | null;
+  checkinTimeTo?: string | null;
+  checkoutTime?: string | null;
+  specialInstructions?: string | null;
+  status?: string | null;
   rooms?: Beds24Room[];
   // Add other fields as needed
 }
@@ -41,6 +42,7 @@ export interface Beds24Room {
   bathrooms?: number;
   featured?: boolean;
   status?: boolean;
+  rates?: number;
   // Add other fields as needed
 }
 
@@ -97,6 +99,9 @@ export interface Beds24Guest {
 }
 
 export interface Beds24BookingsQueryParams {
+  authentication?: {
+    apiKey: string;
+  };
   propertyId?: number[];
   roomId?: number[];
   arrivalFrom?: string;
@@ -115,6 +120,6 @@ export interface Beds24BookingsQueryParams {
 export interface Beds24BookingsResult {
   bookings: Beds24Booking[];
   hasNextPage: boolean;
-  nextPageLink?: string;
+  nextPageLink?: string | undefined | null;
   totalCount?: number;
 }
