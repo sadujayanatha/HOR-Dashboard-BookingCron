@@ -1,26 +1,43 @@
-FROM node:18-alpine
+# Stage 1: Build
+FROM node:20.9.0-alpine as builder
 
-# Install pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# Install pnpm globally
+RUN npm install -g pnpm
 
-# Create app directory
 WORKDIR /app
 
-# Copy package.json and pnpm-lock.yaml
+# Copy package files and install dependencies
 COPY package.json pnpm-lock.yaml ./
-
-# Install dependencies
 RUN pnpm install
 
-# Generate Prisma client
-COPY prisma ./prisma/
-RUN pnpm dlx prisma generate
+# Rebuild bcrypt for the container's architecture
+RUN pnpm rebuild bcrypt
 
-# Copy source code
+# Copy application code and build
 COPY . .
 
-# Build the application
+# Generate Prisma client
+RUN pnpm prisma generate
+
+# Build app
 RUN pnpm run build
 
-# Start the application
-CMD ["pnpm", "run", "start:prod"]
+# Stage 2: Run
+FROM node:20.9.0-alpine
+
+# Install pnpm globally
+RUN npm install -g pnpm
+
+WORKDIR /app
+
+# Copy only necessary files for production
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --prod
+
+# Copy build files from the builder stage
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/node_modules ./node_modules
+
+# Command to run the application
+CMD ["pnpm", "start:prod"]

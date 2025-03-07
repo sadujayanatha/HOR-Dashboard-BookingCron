@@ -1,8 +1,8 @@
 {
   "name": "hor-dashboard-booking-cron",
   "version": "0.0.1",
-  "description": "",
-  "author": "",
+  "description": "Fetch booking service House of Reservation",
+  "author": "HOR",
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
