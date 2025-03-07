@@ -5,16 +5,16 @@
 export interface PropertyModel {
   beds24_id: string;
   name: string;
-  address?: string;
-  city?: string;
-  country?: string;
-  checkinStart?: string;
-  checkinEnd?: string;
-  checkoutStart?: string;
-  specialNote?: string;
+  address?: string | undefined | null;
+  city?: string | undefined | null;
+  country?: string | undefined | null;
+  checkinStart?: string | undefined | null;
+  checkinEnd?: string | undefined | null;
+  checkoutStart?: string | undefined | null;
+  specialNote?: string | undefined | null;
   published: boolean;
-  createdAt?: Date;
-  updatedAt?: Date;
+  createdAt?: string | Date | undefined;
+  updatedAt?: string | Date | undefined;
 }
 
 export interface RoomModel {
@@ -30,17 +30,18 @@ export interface RoomModel {
   featured: boolean;
   status: boolean;
   propertyId: string;
-  createdAt?: Date;
-  updatedAt?: Date;
+  createdAt?: string | Date | undefined;
+  updatedAt?: string | Date | undefined;
 }
 
 export interface BookingModel {
   id?: number;
   propertyId: string;
   booking_id: string;
+  guestId: number | null;
   guest_name: string;
-  guest_email?: string;
-  guest_phone?: string;
+  guest_email?: string | null;
+  guest_phone?: string | null;
   note?: string;
   num_adult: number;
   num_children: number;
@@ -55,9 +56,9 @@ export interface BookingModel {
   status: string;
   channel?: string;
   channel_reference?: string;
-  roomId?: string;
-  createdAt?: Date;
-  updatedAt?: Date;
+  roomId?: string | null;
+  createdAt?: string | Date | undefined;
+  updatedAt?: string | Date | undefined;
 }
 
 export interface BookingDayModel {

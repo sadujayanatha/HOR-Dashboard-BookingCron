@@ -16,7 +16,18 @@ import { BookingsProcessor } from './bookings.processor';
       useFactory: (configService: ConfigService) => ({
         redis: {
           host: configService.get('REDIS_HOST', 'localhost'),
-          port: configService.get('REDIS_PORT', 6379),
+          port: parseInt(configService.get('REDIS_PORT', '6379')),
+          password: configService.get('REDIS_PASSWORD', ''),
+          maxRetriesPerRequest: 10,
+          connectTimeout: 15000,
+          enableReadyCheck: false,
+          retryStrategy: (times: number) => {
+            if (times > 10) {
+              console.error(`Redis connection failed after ${times} attempts`);
+              return null; // Stops retrying
+            }
+            return Math.min(times * 100, 3000); // Incremental backoff
+          },
         },
       }),
     }),
