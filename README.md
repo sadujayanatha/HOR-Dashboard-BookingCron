@@ -22,7 +22,7 @@ A NestJS microservice that synchronizes booking data from Beds24 API to a Postgr
 1. Clone the repository
 
 ```bash
-git clone https://github.com/yourusername/beds24-sync-service.git
+git clone https://github.com/sadujayanatha/HOR-Dashboard-BookingCron
 cd beds24-sync-service
 ```
 
